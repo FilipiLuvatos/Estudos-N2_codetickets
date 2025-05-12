@@ -10,12 +10,14 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +25,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
+import java.io.File;
 import java.time.LocalDateTime;
 
 @Configuration
@@ -36,6 +39,7 @@ public class ImportacaoJobConfiguration {
     public Job job(Step passoInicial,  JobRepository jobRepository){
         return new JobBuilder("geracao-tickets", jobRepository) //Nome
                 .start(passoInicial)//Step inical
+                .next(moverArquivosSteps(jobRepository))//Passo para mover o arquivo
                 .incrementer(new RunIdIncrementer()) // Irá gerar logs
                 .build();
     }
@@ -46,6 +50,13 @@ public class ImportacaoJobConfiguration {
                 .reader(reader) //ler
                 .processor(processor())//processa
                 .writer(writer) //escrever
+                .build();
+    }
+
+    @Bean
+    public Step moverArquivosSteps(JobRepository jobRepository){
+        return new StepBuilder("Mover-Arquivo", jobRepository)
+                .tasklet(moverArquivosTasklet(), transactionManager) //dispara
                 .build();
     }
 
@@ -80,5 +91,31 @@ public class ImportacaoJobConfiguration {
         return new ImportacaoProcessor();
     }
 
+
+    @Bean
+    public Tasklet moverArquivosTasklet() {// Código java para mover arquivo
+        return (contribution, chunkContext) -> {
+            File pastaOrigem = new File("files");
+            File pastaDestino = new File("imported-files");
+
+            if (!pastaDestino.exists()) {// Código java para criar arquivo
+                pastaDestino.mkdirs();
+            }
+
+            File[] arquivos = pastaOrigem.listFiles((dir, name) -> name.endsWith(".csv"));
+
+            if (arquivos != null) {
+                for (File arquivo : arquivos) {
+                    File arquivoDestino = new File(pastaDestino, arquivo.getName());
+                    if (arquivo.renameTo(arquivoDestino)) {
+                        System.out.println("Arquivo movido: " + arquivo.getName());
+                    } else {
+                        throw new RuntimeException("Não foi possível mover o arquivo: " + arquivo.getName());
+                    }
+                }
+            }
+            return RepeatStatus.FINISHED;
+        };
+    }
 
 }
