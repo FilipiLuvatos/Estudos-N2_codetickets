@@ -2,6 +2,7 @@ package com.estudos.codetickets.config;
 
 import com.estudos.codetickets.Importacao;
 import com.estudos.codetickets.ImportacaoMapper;
+import com.estudos.codetickets.ImportacaoProcessor;
 import org.springframework.batch.core.ItemReadListener;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -43,6 +44,7 @@ public class ImportacaoJobConfiguration {
         return new StepBuilder("passo-inicial", jobRepository)
                 .<Importacao,Importacao>chunk(200, transactionManager)// quantos dados serão processados por bloco
                 .reader(reader) //ler
+                .processor(processor())//processa
                 .writer(writer) //escrever
                 .build();
     }
@@ -65,11 +67,18 @@ public class ImportacaoJobConfiguration {
         return new JdbcBatchItemWriterBuilder<Importacao>()
                 .dataSource(dataSource)
                 .sql(
-                        "INSERT INTO importacao (cpf, cliente, nascimento, evento, data, tipo_ingresso, valor, hora_importacao) VALUES" +
-                                " (:cpf, :cliente, :nascimento, :evento, :data, :tipoIngresso, :valor, :horaImportacao)"
+                        "INSERT INTO importacao (cpf, cliente, nascimento, evento, data, tipo_ingresso, valor, hora_importacao, taxa_adm) VALUES" +
+                                " (:cpf, :cliente, :nascimento, :evento, :data, :tipoIngresso, :valor, :horaImportacao, :taxaAdm)"
 
                 )
                 .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
                 .build();
     }
+
+    @Bean
+    public ImportacaoProcessor processor() {
+        return new ImportacaoProcessor();
+    }
+
+
 }
